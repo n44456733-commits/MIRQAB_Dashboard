@@ -27,12 +27,12 @@ st.subheader("Ground Stations")
 a, b = st.columns(2)
 
 with a:
-st.markdown("### Stork VTOL")
-st.info("Waiting for MATLAB telemetry")
+    st.markdown("### Stork VTOL")
+    st.info("Waiting for MATLAB telemetry")
 
 with b:
-st.markdown("### Small UAV")
-st.info("Waiting for MATLAB telemetry")
+    st.markdown("### Small UAV")
+    st.info("Waiting for MATLAB telemetry")
 
 st.subheader("Simulation Results")
 
