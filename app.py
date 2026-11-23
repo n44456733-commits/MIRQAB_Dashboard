@@ -9,12 +9,55 @@ from pathlib import Path
 
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 import streamlit as st
 
 st.set_page_config(page_title="MIRQAB Ground Control", page_icon="🛩️", layout="wide")
 
 STATES = {0: "WAIT", 1: "PREPARE", 2: "TAKEOFF", 3: "EXECUTE", 4: "RETURN", 5: "LAND"}
 STEPS = [0, 1, 2, 3, 3, 3, 4, 5]
+
+# Illustrative local coordinates in kilometers, NOT real GPS positions.
+# Both routes are fixed DEMO examples and show only progress already simulated.
+DEMO_ROUTES_KM = {
+    "Stork VTOL": [(0, 0), (0, 0), (0.7, 0.6), (1.5, 1.2), (2.6, 1.7),
+                   (3.0, 1.1), (1.3, 0.5), (0, 0)],
+    "Small UAV": [(0, 0), (0, 0), (-0.3, 0.6), (-1.0, 1.2), (-1.9, 1.7),
+                  (-2.5, 1.0), (-0.8, 0.4), (0, 0)],
+}
+
+
+def show_demo_routes(index):
+    fig = go.Figure()
+    for name, route in DEMO_ROUTES_KM.items():
+        traveled = route[:index + 1]
+        fig.add_trace(go.Scatter(
+            x=[pt[0] for pt in route], y=[pt[1] for pt in route],
+            mode="lines", name=f"{name} planned route", line=dict(dash="dot"),
+            hovertemplate="East: %{x:.1f} km<br>North: %{y:.1f} km<extra></extra>",
+        ))
+        fig.add_trace(go.Scatter(
+            x=[pt[0] for pt in traveled], y=[pt[1] for pt in traveled],
+            mode="lines+markers", name=f"{name} simulated progress",
+            hovertemplate="East: %{x:.1f} km<br>North: %{y:.1f} km<extra></extra>",
+        ))
+        latest = traveled[-1]
+        fig.add_annotation(x=latest[0], y=latest[1], text=name,
+                           showarrow=True, arrowhead=2, ax=0,
+                           ay=-35 if name == "Stork VTOL" else 35)
+    fig.add_trace(go.Scatter(x=[0], y=[0], mode="markers", name="Demo ground station",
+                             marker=dict(symbol="diamond", size=15)))
+    fig.update_layout(
+        title="Illustrative UAV positions and routes (DEMO)",
+        xaxis_title="East / West (km from demo station)",
+        yaxis_title="North / South (km from demo station)",
+        legend=dict(orientation="h", y=-0.3),
+        height=480, margin=dict(l=15, r=15, t=60, b=55),
+    )
+    fig.update_yaxes(scaleanchor="x", scaleratio=1)
+    st.plotly_chart(fig, use_container_width=True)
+    st.caption("Illustrative local XY route only — NOT GPS, actual aircraft tracking, or MATLAB telemetry. "
+               "NEXT STEP advances both demo routes; RESET returns them to the station.")
 
 
 def reset():
@@ -171,6 +214,8 @@ if mode == "Interactive demo":
         x.metric("Battery", f"{current['SmallBattery_percent']}%")
         y.metric("Connection", "Connected")
         z.metric("UAV status", "In flight" if current["SmallUAVStatus"] else "On ground")
+    st.subheader("Aircraft locations & routes — DEMO")
+    show_demo_routes(d["index"])
     df = pd.DataFrame(d["history"])
     st.subheader("Mission telemetry — DEMO")
     selected = st.selectbox("Signal", [c for c in df.select_dtypes(include="number").columns if c != "Time_s"])
