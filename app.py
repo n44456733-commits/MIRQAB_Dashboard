@@ -63,8 +63,8 @@ if file is not None:
             use_container_width=True
         )
 
-except Exception as e:
-    st.error(f"Cannot read data: {e}")
+    except Exception as e:
+        st.error(f"Cannot read data: {e}")
     else:    st.warning("Upload real simulation data to view results.")
 
 st.subheader("Mission States")
