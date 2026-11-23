@@ -74,6 +74,10 @@ def snapshot():
     # All values below are illustrative DEMO data, not hardware telemetry.
     stork_battery = max(0, 100 - d["index"] * 2)
     small_battery = max(0, 90 - d["index"] * 3)
+    # Optional fault injection for testing dashboard alerts; DEMO only.
+    if st.session_state.get("test_stork_low_battery", False):
+        stork_battery = 15
+    small_connection = 0 if st.session_state.get("test_small_connection_loss", False) else 1
     return {
         "Time_s": d["time"], "MissionState": state,
         "OperatorApproval": 1 if d["decision"] == "APPROVE" else 0,
@@ -82,7 +86,7 @@ def snapshot():
         "StorkBattery_percent": stork_battery,
         "StorkConnection": 1, "StorkUAVStatus": int(state in (2, 3, 4)),
         "SmallBattery_percent": small_battery,
-        "SmallConnection": 1, "SmallUAVStatus": int(state in (2, 3, 4)),
+        "SmallConnection": small_connection, "SmallUAVStatus": int(state in (2, 3, 4)),
     }
 
 
@@ -150,6 +154,28 @@ def metric_value(val, suffix=""):
     return "—" if val is None else f"{val:.1f}{suffix}" if suffix else str(int(round(val)))
 
 
+def render_alerts(aircraft, source_label):
+    """Check latest values; distinguish missing data from healthy telemetry."""
+    st.subheader("Alerts")
+    alerts = []
+    for name, battery, connection in aircraft:
+        if battery is None or connection is None:
+            alerts.append(("warning", f"NO DATA: {name}"))
+            continue
+        if battery < 20:
+            alerts.append(("error", f"LOW BATTERY: {name} ({battery:.0f}%)"))
+        if connection < 0.5:
+            alerts.append(("error", f"CONNECTION LOST: {name}"))
+    if alerts:
+        for severity, message in alerts:
+            if severity == "warning":
+                st.warning(message)
+            else:
+                st.error(message)
+    else:
+        st.success(f"No alert condition detected in {source_label}.")
+
+
 if "demo" not in st.session_state:
     reset()
 
@@ -166,6 +192,10 @@ if mode == "Interactive demo":
     with st.sidebar:
         decision = st.radio("Operator decision", ["APPROVE", "REJECT"], horizontal=True,
                             help="Choose before START. REJECT aborts the demo mission.")
+        with st.expander("Test alerts — DEMO only"):
+            st.checkbox("Simulate Stork low battery (15%)", key="test_stork_low_battery")
+            st.checkbox("Simulate Small UAV connection loss", key="test_small_connection_loss")
+            st.caption("Test switches affect Python demo data only, not MATLAB or UAVs.")
         c1, c2 = st.columns(2)
         with c1:
             if st.button("▶ START", use_container_width=True, disabled=d["running"] or d["status"] == "FINISHED"):
@@ -206,14 +236,20 @@ if mode == "Interactive demo":
         st.markdown("#### Stork VTOL")
         x, y, z = st.columns(3)
         x.metric("Battery", f"{current['StorkBattery_percent']}%")
-        y.metric("Connection", "Connected")
+        y.metric("Connection", "Connected" if current["StorkConnection"] >= 0.5 else "Disconnected")
         z.metric("UAV status", "In flight" if current["StorkUAVStatus"] else "On ground")
     with b:
         st.markdown("#### Small UAV")
         x, y, z = st.columns(3)
         x.metric("Battery", f"{current['SmallBattery_percent']}%")
-        y.metric("Connection", "Connected")
+        y.metric("Connection", "Connected" if current["SmallConnection"] >= 0.5 else "Disconnected")
         z.metric("UAV status", "In flight" if current["SmallUAVStatus"] else "On ground")
+    render_alerts([
+        ("Stork VTOL", current["StorkBattery_percent"], current["StorkConnection"]),
+        ("Small UAV", current["SmallBattery_percent"], current["SmallConnection"]),
+    ], "the current Python demo step")
+    st.caption("Alerts recalculate on every button click / NEXT STEP. Demo fault tests are in the sidebar.")
+
     st.subheader("Aircraft locations & routes — DEMO")
     show_demo_routes(d["index"])
     df = pd.DataFrame(d["history"])
@@ -320,23 +356,12 @@ else:
                 st.plotly_chart(chart, use_container_width=True)
             else:
                 st.info("No numeric signal columns found.")
-            st.subheader("Alerts")
-            alerts = []
-            for label, batt, conn in [
-                ("Stork VTOL", "StorkBattery_percent", "StorkConnection"),
-                ("Small UAV", "SmallBattery_percent", "SmallConnection"),
-            ]:
-                bval = last_value(df, [batt])
-                cval = last_value(df, [conn])
-                if bval is not None and bval < 20:
-                    alerts.append(f"LOW BATTERY: {label}")
-                if cval is not None and cval < 0.5:
-                    alerts.append(f"CONNECTION LOST: {label}")
-            if alerts:
-                for msg in alerts:
-                    st.error(msg)
-            else:
-                st.success("No alert condition detected in this uploaded telemetry.")
+            render_alerts([
+                ("Stork VTOL", last_value(df, ["StorkBattery_percent"]),
+                 last_value(df, ["StorkConnection"])),
+                ("Small UAV", last_value(df, ["SmallBattery_percent"]),
+                 last_value(df, ["SmallConnection"])),
+            ], "this uploaded MATLAB telemetry")
             with st.expander("View imported data"):
                 st.dataframe(df, use_container_width=True)
             st.download_button("Download imported data", df.to_csv(index=False).encode("utf-8"),
