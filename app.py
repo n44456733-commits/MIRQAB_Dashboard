@@ -42,15 +42,15 @@ type=["csv"]
 )
 
 if file is not None:
-try:
-df = pd.read_csv(file)
-st.success("Simulation data loaded successfully")
-st.dataframe(df, use_container_width=True)
+    try:
+        df = pd.read_csv(file)
+        st.success("Simulation data loaded successfully")
+        st.dataframe(df, use_container_width=True)
 
-    numeric = df.select_dtypes(include="number")
+        numeric = df.select_dtypes(include="number")
 
-    if not numeric.empty:
-        selected = st.selectbox(
+       if not numeric.empty:
+            selected = st.selectbox(
             "Choose a signal",
             numeric.columns.tolist()
         )
@@ -65,8 +65,7 @@ st.dataframe(df, use_container_width=True)
 
 except Exception as e:
     st.error(f"Cannot read data: {e}")
-else:
-st.warning("Upload real simulation data to view results.")
+    else:    st.warning("Upload real simulation data to view results.")
 
 st.subheader("Mission States")
 
