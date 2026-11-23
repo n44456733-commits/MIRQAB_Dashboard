@@ -217,6 +217,57 @@ if mode == "Interactive demo":
     st.subheader("Aircraft locations & routes — DEMO")
     show_demo_routes(d["index"])
     df = pd.DataFrame(d["history"])
+
+    st.subheader("Response time & system efficiency — DEMO")
+    st.caption(
+        "These are simulated mission times and illustrative battery consumption. "
+        "They are NOT measured real-world command latency or MATLAB/Simulink performance."
+    )
+
+    # The current Python demo advances by exactly 30 simulated seconds per step.
+    elapsed = int(d["time"])
+    mission_finished = d["status"] == "FINISHED"
+    mission_rejected = d["status"] == "REJECTED"
+    stork_used = 100 - current["StorkBattery_percent"]
+    small_used = 90 - current["SmallBattery_percent"]
+
+    perf1, perf2, perf3, perf4 = st.columns(4)
+    perf1.metric("Mission elapsed (simulated)", f"{elapsed} s")
+    perf2.metric("Mission completion", "100%" if mission_finished else "0%" if mission_rejected else f"{round(100 * d['index'] / (len(STEPS) - 1))}%")
+    perf3.metric("Stork battery used", f"{stork_used}%")
+    perf4.metric("Small UAV battery used", f"{small_used}%")
+
+    step_rows = []
+    first_seen = set()
+    for index, state in enumerate(STEPS[: d["index"] + 1]):
+        if state not in first_seen:
+            step_rows.append({
+                "MissionState": state,
+                "Stage": STATES[state],
+                "FirstReached_s": index * 30,
+            })
+            first_seen.add(state)
+
+    if mission_rejected:
+        st.warning("Rejected before start: 0 simulated seconds elapsed; no mission stages executed.")
+    elif elapsed > 0:
+        st.markdown("**Mission stage timing**")
+        stages = pd.DataFrame(step_rows)
+        st.dataframe(stages, use_container_width=True, hide_index=True)
+        # Time to TAKEOFF and final LAND are simulated thresholds, not device response times.
+        time_to_takeoff = next((r["FirstReached_s"] for r in step_rows if r["Stage"] == "TAKEOFF"), None)
+        if time_to_takeoff is not None:
+            st.write(f"Simulated time to TAKEOFF: **{time_to_takeoff} s**")
+        if mission_finished:
+            st.success(f"Mission completed in {elapsed} simulated seconds. Both aircraft remain connected in this demo.")
+        minutes = elapsed / 60
+        st.write(
+            f"Average simulated battery use: Stork **{stork_used / minutes:.1f}%/min** · "
+            f"Small UAV **{small_used / minutes:.1f}%/min**"
+        )
+    else:
+        st.info("Press START and NEXT STEP to generate mission performance values.")
+
     st.subheader("Mission telemetry — DEMO")
     selected = st.selectbox("Signal", [c for c in df.select_dtypes(include="number").columns if c != "Time_s"])
     fig = px.line(df, x="Time_s", y=selected, markers=True, title=f"{selected} (simulated)")
