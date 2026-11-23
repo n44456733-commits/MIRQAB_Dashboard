@@ -49,7 +49,7 @@ if file is not None:
 
         numeric = df.select_dtypes(include="number")
 
-       if not numeric.empty:
+        if not numeric.empty:
             selected = st.selectbox(
             "Choose a signal",
             numeric.columns.tolist()
